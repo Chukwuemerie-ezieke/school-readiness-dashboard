@@ -1,5 +1,7 @@
-import { useRef } from "react";
+import { useRef, useEffect, useState } from "react";
 import { useAssessment } from "@/lib/assessment-store";
+import { useParams } from "wouter";
+import { supabase, isConfigured, type Assessment } from "@/lib/supabase";
 import {
   DOMAINS,
   getDomainScore,
@@ -23,10 +25,60 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function ReportPage() {
   const { state } = useAssessment();
-  const { scores, schoolName, assessorName, assessmentDate } = state;
-  const hasScores = Object.keys(scores).length > 0;
+  const params = useParams<{ assessmentId: string }>();
+  const assessmentId = params.assessmentId;
+
+  const [remoteAssessment, setRemoteAssessment] = useState<Assessment | null>(null);
+  const [schoolName, setSchoolName] = useState<string>("");
+  const [loadingRemote, setLoadingRemote] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!assessmentId || !isConfigured) return;
+    setLoadingRemote(true);
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("assessments")
+          .select("*")
+          .eq("id", assessmentId)
+          .single();
+        if (data) {
+          setRemoteAssessment(data as Assessment);
+          const { data: school } = await supabase
+            .from("schools")
+            .select("name")
+            .eq("id", (data as Assessment).school_id)
+            .single();
+          setSchoolName(school?.name || "");
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoadingRemote(false);
+      }
+    })();
+  }, [assessmentId]);
+
+  const scores = remoteAssessment
+    ? (remoteAssessment.scores as Record<string, MaturityLevel>)
+    : state.scores;
+
+  const displaySchoolName = remoteAssessment ? schoolName : state.schoolName;
+  const displayAssessorName = state.assessorName;
+  const displayDate = remoteAssessment?.assessment_date || state.assessmentDate;
+
+  const hasScores = Object.keys(scores).length > 0;
+
+  if (loadingRemote) {
+    return (
+      <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto space-y-4">
+        <div className="h-8 w-48 bg-muted animate-pulse rounded-lg" />
+        <div className="h-64 bg-muted animate-pulse rounded-xl" />
+      </div>
+    );
+  }
 
   if (!hasScores) {
     return (
@@ -53,47 +105,30 @@ export default function ReportPage() {
   const overallLabel = getMaturityLabel(overall);
   const recs = generateRecommendations(scores);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => { window.print(); };
 
   const handleExportCSV = () => {
     const headers = ["Domain", "Control", "Framework", "Reference", "Score", "Maturity Level"];
     const rows: string[][] = [];
-
     for (const domain of DOMAINS) {
       for (const control of domain.controls) {
         const score = (scores[control.id] ?? 0) as MaturityLevel;
-        rows.push([
-          domain.name,
-          control.title,
-          control.framework,
-          control.reference,
-          score.toString(),
-          MATURITY_LABELS[score],
-        ]);
+        rows.push([domain.name, control.title, control.framework, control.reference, score.toString(), MATURITY_LABELS[score]]);
       }
     }
-
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${cell}"`).join(","))
-      .join("\n");
-
+    const csvContent = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${(schoolName || "school").replace(/\s+/g, "-").toLowerCase()}-readiness-report.csv`;
+    link.download = `${(displaySchoolName || "school").replace(/\s+/g, "-").toLowerCase()}-readiness-report.csv`;
     link.click();
     URL.revokeObjectURL(url);
-
     toast({ title: "CSV exported successfully" });
   };
 
-  const strongDomains = DOMAINS.filter((d) => getDomainScore(d.id, scores) >= 2.5)
-    .sort((a, b) => getDomainScore(b.id, scores) - getDomainScore(a.id, scores));
-  const weakDomains = DOMAINS.filter((d) => getDomainScore(d.id, scores) < 2)
-    .sort((a, b) => getDomainScore(a.id, scores) - getDomainScore(b.id, scores));
+  const strongDomains = DOMAINS.filter((d) => getDomainScore(d.id, scores) >= 2.5).sort((a, b) => getDomainScore(b.id, scores) - getDomainScore(a.id, scores));
+  const weakDomains = DOMAINS.filter((d) => getDomainScore(d.id, scores) < 2).sort((a, b) => getDomainScore(a.id, scores) - getDomainScore(b.id, scores));
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
@@ -126,7 +161,7 @@ export default function ReportPage() {
                 <h3 className="text-base font-semibold opacity-90">School Readiness Assessment Report</h3>
               </div>
               <div className="text-right text-sm opacity-90">
-                <p>Harmony Digital Consults</p>
+                <p>Harmony Digital Consults Ltd</p>
               </div>
             </div>
           </div>
@@ -134,15 +169,15 @@ export default function ReportPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase">School</p>
-                <p className="font-medium mt-0.5">{schoolName || "—"}</p>
+                <p className="font-medium mt-0.5">{displaySchoolName || "—"}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase">Assessor</p>
-                <p className="font-medium mt-0.5">{assessorName || "—"}</p>
+                <p className="font-medium mt-0.5">{displayAssessorName || "Harmony Digital Consults"}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase">Date</p>
-                <p className="font-medium mt-0.5">{assessmentDate || "—"}</p>
+                <p className="font-medium mt-0.5">{displayDate || "—"}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase">Framework</p>
@@ -155,35 +190,23 @@ export default function ReportPage() {
         {/* Executive Summary */}
         <Card className="border border-card-border">
           <CardContent className="p-5 md:p-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
-              Executive Summary
-            </h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">Executive Summary</h3>
             <div className="flex items-center gap-4 mb-4">
               <div
                 className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold border-4"
-                style={{
-                  color: getMaturityColor(overall),
-                  borderColor: getMaturityColor(overall),
-                }}
+                style={{ color: getMaturityColor(overall), borderColor: getMaturityColor(overall) }}
                 data-testid="text-report-overall"
               >
                 {overallPct}%
               </div>
               <div>
-                <p className="text-lg font-bold" style={{ color: getMaturityColor(overall) }}>
-                  {overallLabel}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Overall maturity: {overall.toFixed(2)} out of 4.0
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {Object.keys(scores).length} controls assessed across {DOMAINS.length} domains
-                </p>
+                <p className="text-lg font-bold" style={{ color: getMaturityColor(overall) }}>{overallLabel}</p>
+                <p className="text-sm text-muted-foreground">Overall maturity: {overall.toFixed(2)} out of 4.0</p>
+                <p className="text-sm text-muted-foreground">{Object.keys(scores).length} controls assessed across {DOMAINS.length} domains</p>
               </div>
             </div>
-
             <p className="text-sm leading-relaxed text-foreground/90">
-              {schoolName || "The school"} demonstrates a <strong>{overallLabel.toLowerCase()}</strong> level of
+              {displaySchoolName || "The school"} demonstrates a <strong>{overallLabel.toLowerCase()}</strong> level of
               cybersecurity and digital transformation maturity. {getExecutiveSummaryText(overall, recs.length)}
             </p>
           </CardContent>
@@ -192,9 +215,7 @@ export default function ReportPage() {
         {/* Domain Scores Table */}
         <Card className="border border-card-border">
           <CardContent className="p-5 md:p-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
-              Domain Scores
-            </h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">Domain Scores</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm" data-testid="table-domain-scores">
                 <thead>
@@ -214,14 +235,10 @@ export default function ReportPage() {
                     return (
                       <tr key={domain.id} className="border-b border-border last:border-0">
                         <td className="py-2.5 pr-4 font-medium">{domain.name}</td>
-                        <td className="py-2.5 px-2 text-center tabular-nums font-semibold" style={{ color }}>
-                          {score.toFixed(1)}
-                        </td>
+                        <td className="py-2.5 px-2 text-center tabular-nums font-semibold" style={{ color }}>{score.toFixed(1)}</td>
                         <td className="py-2.5 px-2 text-center tabular-nums">{pct}%</td>
                         <td className="py-2.5 pl-4">
-                          <Badge variant="outline" className="text-xs" style={{ color, borderColor: color }}>
-                            {label}
-                          </Badge>
+                          <Badge variant="outline" className="text-xs" style={{ color, borderColor: color }}>{label}</Badge>
                         </td>
                       </tr>
                     );
@@ -237,8 +254,7 @@ export default function ReportPage() {
           <Card className="border border-card-border">
             <CardContent className="p-5">
               <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-600" />
-                Strengths
+                <CheckCircle2 className="w-4 h-4 text-green-600" />Strengths
               </h3>
               {strongDomains.length > 0 ? (
                 <div className="space-y-2">
@@ -260,8 +276,7 @@ export default function ReportPage() {
           <Card className="border border-card-border">
             <CardContent className="p-5">
               <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-destructive" />
-                Areas for Improvement
+                <AlertTriangle className="w-4 h-4 text-destructive" />Areas for Improvement
               </h3>
               {weakDomains.length > 0 ? (
                 <div className="space-y-2">
@@ -286,16 +301,12 @@ export default function ReportPage() {
           <Card className="border border-card-border">
             <CardContent className="p-5 md:p-6">
               <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" />
-                Recommendations
+                <TrendingUp className="w-4 h-4" />Recommendations
               </h3>
               <div className="space-y-3">
                 {recs.map((rec, i) => (
                   <div key={i} className="flex items-start gap-3 py-2 border-b border-border last:border-0">
-                    <Badge
-                      variant={rec.priority === "Critical" ? "destructive" : "outline"}
-                      className="text-xs shrink-0 mt-0.5 min-w-[60px] justify-center"
-                    >
+                    <Badge variant={rec.priority === "Critical" ? "destructive" : "outline"} className="text-xs shrink-0 mt-0.5 min-w-[60px] justify-center">
                       {rec.priority}
                     </Badge>
                     <div>
@@ -313,8 +324,7 @@ export default function ReportPage() {
         <Card className="border border-card-border print:break-before-page">
           <CardContent className="p-5 md:p-6">
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-              <Info className="w-4 h-4" />
-              Control-Level Scores
+              <Info className="w-4 h-4" />Control-Level Scores
             </h3>
             <div className="space-y-4">
               {DOMAINS.map((domain) => (
@@ -331,9 +341,7 @@ export default function ReportPage() {
                             <span className="text-xs text-muted-foreground ml-2">{control.reference}</span>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-xs font-bold tabular-nums w-4 text-right" style={{ color }}>
-                              {score}
-                            </span>
+                            <span className="text-xs font-bold tabular-nums w-4 text-right" style={{ color }}>{score}</span>
                             <Badge variant="outline" className="text-[10px] min-w-[70px] justify-center" style={{ color, borderColor: color }}>
                               {MATURITY_LABELS[score]}
                             </Badge>
@@ -359,15 +367,9 @@ export default function ReportPage() {
 }
 
 function getExecutiveSummaryText(overall: number, recCount: number): string {
-  if (overall >= 3.5) {
-    return "The school has strong cybersecurity practices in place with comprehensive policies and controls. Focus on continuous improvement and emerging threats like AI governance.";
-  }
-  if (overall >= 2.5) {
-    return `There are solid foundations in place, but ${recCount} areas need strengthening to reach full maturity. Prioritize the critical and high-priority recommendations below.`;
-  }
-  if (overall >= 1.5) {
-    return `Several key areas require attention. With ${recCount} recommendations identified, the school should prioritize governance, data protection, and incident response planning.`;
-  }
+  if (overall >= 3.5) return "The school has strong cybersecurity practices in place with comprehensive policies and controls. Focus on continuous improvement and emerging threats like AI governance.";
+  if (overall >= 2.5) return `There are solid foundations in place, but ${recCount} areas need strengthening to reach full maturity. Prioritize the critical and high-priority recommendations below.`;
+  if (overall >= 1.5) return `Several key areas require attention. With ${recCount} recommendations identified, the school should prioritize governance, data protection, and incident response planning.`;
   return `Significant gaps exist across most domains. Immediate action is needed on governance fundamentals, basic protective controls, and staff awareness training. ${recCount} recommendations are provided below.`;
 }
 

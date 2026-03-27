@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Switch, Route, Router } from "wouter";
+import { Switch, Route, Router, useLocation } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -10,7 +10,16 @@ import DashboardPage from "@/pages/dashboard";
 import AssessPage from "@/pages/assess";
 import ResultsPage from "@/pages/results";
 import ReportPage from "@/pages/report";
+import LoginPage from "@/pages/login";
+import SignupPage from "@/pages/signup";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import AdminSchoolsPage from "@/pages/admin-schools";
+import AdminUsersPage from "@/pages/admin-users";
+import SchoolDetailPage from "@/pages/school-detail";
+import SettingsPage from "@/pages/settings";
 import DashboardLayout from "@/components/DashboardLayout";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { AssessmentContext, defaultState, DEMO_SCORES, type AssessmentState } from "@/lib/assessment-store";
 import type { MaturityLevel } from "@/lib/assessment-data";
 
@@ -74,18 +83,99 @@ function AssessmentProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Pages that render INSIDE the dashboard layout (protected)
 function AppRouter() {
   return (
     <DashboardLayout>
       <Switch>
-        <Route path="/" component={DashboardPage} />
-        <Route path="/assess" component={AssessPage} />
-        <Route path="/results" component={ResultsPage} />
-        <Route path="/report" component={ReportPage} />
+        <Route path="/">
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/schools">
+          <ProtectedRoute allowedRoles={["admin", "consultant"]}>
+            <AdminSchoolsPage />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/schools/:id">
+          {(params) => (
+            <ProtectedRoute allowedRoles={["admin", "consultant"]}>
+              <SchoolDetailPage />
+            </ProtectedRoute>
+          )}
+        </Route>
+        <Route path="/admin/users">
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminUsersPage />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/assess">
+          <ProtectedRoute allowedRoles={["admin", "consultant"]}>
+            <AssessPage />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/assess/:schoolId">
+          {(params) => (
+            <ProtectedRoute allowedRoles={["admin", "consultant"]}>
+              <AssessPage />
+            </ProtectedRoute>
+          )}
+        </Route>
+        <Route path="/results">
+          <ProtectedRoute>
+            <ResultsPage />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/results/:assessmentId">
+          {(params) => (
+            <ProtectedRoute>
+              <ResultsPage />
+            </ProtectedRoute>
+          )}
+        </Route>
+        <Route path="/report">
+          <ProtectedRoute>
+            <ReportPage />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/report/:assessmentId">
+          {(params) => (
+            <ProtectedRoute>
+              <ReportPage />
+            </ProtectedRoute>
+          )}
+        </Route>
+        <Route path="/settings">
+          <ProtectedRoute>
+            <SettingsPage />
+          </ProtectedRoute>
+        </Route>
         <Route component={NotFound} />
       </Switch>
     </DashboardLayout>
   );
+}
+
+// Public + auth routing logic
+function AppWithAuth() {
+  const [location] = useLocation();
+
+  // Public auth routes — render without DashboardLayout
+  const publicRoutes = ["/login", "/signup", "/forgot-password"];
+  const isPublicRoute = publicRoutes.some(r => location === r || location.startsWith(r));
+
+  if (isPublicRoute) {
+    return (
+      <Switch>
+        <Route path="/login" component={LoginPage} />
+        <Route path="/signup" component={SignupPage} />
+        <Route path="/forgot-password" component={ForgotPasswordPage} />
+      </Switch>
+    );
+  }
+
+  return <AppRouter />;
 }
 
 function App() {
@@ -93,11 +183,13 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <AssessmentProvider>
-          <Router hook={useHashLocation}>
-            <AppRouter />
-          </Router>
-        </AssessmentProvider>
+        <AuthProvider>
+          <AssessmentProvider>
+            <Router hook={useHashLocation}>
+              <AppWithAuth />
+            </Router>
+          </AssessmentProvider>
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAssessment } from "@/lib/assessment-store";
 import { DOMAINS, MATURITY_LABELS, type MaturityLevel } from "@/lib/assessment-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
+import { supabase, isConfigured } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 import {
   Scale, Search, Shield, Eye, Siren, RefreshCcw,
   GraduationCap, Lock, Monitor, Bot,
@@ -30,6 +31,25 @@ export default function AssessPage() {
   const [activeDomain, setActiveDomain] = useState(0);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const params = useParams<{ schoolId: string }>();
+  const schoolId = params.schoolId;
+  const { user, profile } = useAuth();
+
+  // If schoolId is in URL, load school name from Supabase
+  const [assessmentId, setAssessmentId] = useState<string | null>(null);
+  const [supabaseLoading, setSupabaseLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isConfigured || !schoolId) return;
+    supabase
+      .from("schools")
+      .select("name")
+      .eq("id", schoolId)
+      .single()
+      .then(({ data }) => {
+        if (data?.name) setSchoolName(data.name);
+      });
+  }, [schoolId, setSchoolName]);
 
   const domain = DOMAINS[activeDomain];
   const Icon = ICON_MAP[domain.icon] || Shield;
@@ -42,7 +62,47 @@ export default function AssessPage() {
   const totalScored = Object.keys(state.scores).length;
   const totalControls = DOMAINS.reduce((sum, d) => sum + d.controls.length, 0);
 
-  const handleComplete = () => {
+  // Auto-save scores to Supabase as user progresses
+  const saveToSupabase = async (scores: Record<string, MaturityLevel>, completed = false) => {
+    if (!isConfigured || !schoolId || !user) return;
+    const overallNumerator = Object.values(scores).reduce((sum: number, s) => sum + (s as number), 0);
+    const overallScore = Object.keys(scores).length > 0 ? overallNumerator / (Object.keys(scores).length * 4) * 4 : 0;
+
+    if (assessmentId) {
+      await supabase
+        .from("assessments")
+        .update({
+          scores,
+          overall_score: overallScore / 4,
+          status: completed ? "completed" : "in_progress",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", assessmentId);
+    } else {
+      const { data } = await supabase
+        .from("assessments")
+        .insert([{
+          school_id: schoolId,
+          assessor_id: user.id,
+          assessment_date: state.assessmentDate || new Date().toISOString().split("T")[0],
+          status: completed ? "completed" : "in_progress",
+          scores,
+          overall_score: overallScore / 4,
+        }])
+        .select("id")
+        .single();
+      if (data?.id) setAssessmentId(data.id);
+    }
+  };
+
+  const handleScoreSet = (controlId: string, level: MaturityLevel) => {
+    setScore(controlId, level);
+    const updatedScores = { ...state.scores, [controlId]: level };
+    // Debounce auto-save
+    saveToSupabase(updatedScores);
+  };
+
+  const handleComplete = async () => {
     if (!state.schoolName.trim()) {
       toast({ title: "School name is required", variant: "destructive" });
       return;
@@ -54,7 +114,15 @@ export default function AssessPage() {
       });
     }
     markComplete();
-    navigate("/results");
+    setSupabaseLoading(true);
+    await saveToSupabase(state.scores, true);
+    setSupabaseLoading(false);
+
+    if (assessmentId) {
+      navigate(`/results/${assessmentId}`);
+    } else {
+      navigate("/results");
+    }
   };
 
   return (
@@ -80,13 +148,14 @@ export default function AssessPage() {
                 placeholder="e.g. Greenfield Academy"
                 className="mt-1"
                 data-testid="input-school-name"
+                readOnly={Boolean(schoolId && state.schoolName)}
               />
             </div>
             <div>
               <Label htmlFor="assessor-name" className="text-xs font-medium">Assessor</Label>
               <Input
                 id="assessor-name"
-                value={state.assessorName}
+                value={state.assessorName || profile?.full_name || ""}
                 onChange={(e) => setAssessorName(e.target.value)}
                 placeholder="Your name"
                 className="mt-1"
@@ -195,7 +264,7 @@ export default function AssessPage() {
                   {([0, 1, 2, 3, 4] as MaturityLevel[]).map((level) => (
                     <button
                       key={level}
-                      onClick={() => setScore(control.id, level)}
+                      onClick={() => handleScoreSet(control.id, level)}
                       className={`py-2 px-1 rounded-md text-xs font-medium transition-all border ${
                         currentScore === level
                           ? "border-primary bg-primary text-primary-foreground shadow-sm"
@@ -243,9 +312,9 @@ export default function AssessPage() {
             <ChevronRight className="w-4 h-4 ml-1" />
           </Button>
         ) : (
-          <Button size="sm" onClick={handleComplete} data-testid="button-complete-assessment">
+          <Button size="sm" onClick={handleComplete} disabled={supabaseLoading} data-testid="button-complete-assessment">
             <CheckCircle2 className="w-4 h-4 mr-1" />
-            View Results
+            {supabaseLoading ? "Saving…" : "View Results"}
           </Button>
         )}
       </div>

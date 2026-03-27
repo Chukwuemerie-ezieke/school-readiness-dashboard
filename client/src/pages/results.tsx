@@ -1,4 +1,7 @@
 import { useAssessment } from "@/lib/assessment-store";
+import { useEffect, useState } from "react";
+import { useParams } from "wouter";
+import { supabase, isConfigured, type Assessment } from "@/lib/supabase";
 import {
   DOMAINS,
   getDomainScore,
@@ -31,8 +34,57 @@ const ICON_MAP: Record<string, React.ElementType> = {
 
 export default function ResultsPage() {
   const { state } = useAssessment();
-  const { scores } = state;
+  const params = useParams<{ assessmentId: string }>();
+  const assessmentId = params.assessmentId;
+
+  const [remoteAssessment, setRemoteAssessment] = useState<Assessment | null>(null);
+  const [schoolName, setSchoolName] = useState<string>("");
+  const [loadingRemote, setLoadingRemote] = useState(false);
+
+  // Load from Supabase if assessmentId is in URL
+  useEffect(() => {
+    if (!assessmentId || !isConfigured) return;
+    setLoadingRemote(true);
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("assessments")
+          .select("*")
+          .eq("id", assessmentId)
+          .single();
+        if (data) {
+          setRemoteAssessment(data as Assessment);
+          const { data: school } = await supabase
+            .from("schools")
+            .select("name")
+            .eq("id", (data as Assessment).school_id)
+            .single();
+          setSchoolName(school?.name || "");
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoadingRemote(false);
+      }
+    })();
+  }, [assessmentId]);
+
+  // Determine which scores to use
+  const scores = remoteAssessment
+    ? (remoteAssessment.scores as Record<string, MaturityLevel>)
+    : state.scores;
+
+  const displaySchoolName = remoteAssessment ? schoolName : state.schoolName;
   const hasScores = Object.keys(scores).length > 0;
+
+  if (loadingRemote) {
+    return (
+      <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-4">
+        <div className="h-8 w-48 bg-muted animate-pulse rounded-lg" />
+        <div className="h-64 bg-muted animate-pulse rounded-xl" />
+      </div>
+    );
+  }
 
   if (!hasScores) {
     return (
@@ -62,17 +114,19 @@ export default function ResultsPage() {
     fullMark: 4,
   }));
 
+  const reportLink = assessmentId ? `/report/${assessmentId}` : "/report";
+
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Detailed Results</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {state.schoolName && `${state.schoolName} · `}
+            {displaySchoolName && `${displaySchoolName} · `}
             Overall: {getScorePercentage(overall)}% ({getMaturityLabel(overall)})
           </p>
         </div>
-        <Link href="/report">
+        <Link href={reportLink}>
           <Button size="sm" variant="outline" data-testid="button-view-report">
             View Report
           </Button>
@@ -86,23 +140,9 @@ export default function ResultsPage() {
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
                 <PolarGrid stroke="hsl(var(--border))" />
-                <PolarAngleAxis
-                  dataKey="domain"
-                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                />
-                <PolarRadiusAxis
-                  angle={90}
-                  domain={[0, 4]}
-                  tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
-                  tickCount={5}
-                />
-                <Radar
-                  dataKey="score"
-                  stroke="hsl(var(--primary))"
-                  fill="hsl(var(--primary))"
-                  fillOpacity={0.15}
-                  strokeWidth={2}
-                />
+                <PolarAngleAxis dataKey="domain" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                <PolarRadiusAxis angle={90} domain={[0, 4]} tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} tickCount={5} />
+                <Radar dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.15} strokeWidth={2} />
               </RadarChart>
             </ResponsiveContainer>
           </div>
