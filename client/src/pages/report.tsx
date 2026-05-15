@@ -22,6 +22,7 @@ import {
   AlertTriangle, CheckCircle2, TrendingUp, Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { HarmonyLogo } from "@/components/HarmonyLogo";
 
 export default function ReportPage() {
   const { state } = useAssessment();
@@ -155,13 +156,19 @@ export default function ReportPage() {
         {/* Report Header */}
         <Card className="border border-card-border overflow-hidden">
           <div className="bg-primary p-5 md:p-6 text-primary-foreground">
-            <div className="flex items-start justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
                 <h2 className="text-lg font-bold">Cybersecurity & Digital Transformation</h2>
                 <h3 className="text-base font-semibold opacity-90">School Readiness Assessment Report</h3>
               </div>
-              <div className="text-right text-sm opacity-90">
-                <p>Harmony Digital Consults Ltd</p>
+              <div className="flex items-center gap-3">
+                <div className="text-right text-sm opacity-90">
+                  <p className="font-semibold">Harmony Digital</p>
+                  <p className="text-xs opacity-80">Consults Ltd</p>
+                </div>
+                <div className="bg-white rounded-lg p-1.5 shrink-0">
+                  <HarmonyLogo className="w-12 h-12" />
+                </div>
               </div>
             </div>
           </div>

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { HarmonyLogo } from "./HarmonyLogo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,31 +45,6 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { path: "/report", label: "Report", icon: FileText },
   { path: "/settings", label: "Settings", icon: Settings },
 ];
-
-function HexLogo({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 40 44"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-label="Harmony Digital Consults Logo"
-    >
-      <path
-        d="M20 2L36.5 11.5V30.5L20 40L3.5 30.5V11.5L20 2Z"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        fill="none"
-      />
-      <path
-        d="M14 15V29M26 15V29M14 22H26"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 function getRoleBadgeClass(role: string): string {
   if (role === "admin") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
@@ -116,7 +92,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-[240px] flex-col border-r border-sidebar-border bg-sidebar shrink-0">
         <div className="flex items-center gap-2.5 px-5 py-5 border-b border-sidebar-border">
-          <HexLogo className="w-8 h-8 text-primary" />
+          <HarmonyLogo className="w-10 h-10 shrink-0" />
           <div className="flex flex-col leading-tight">
             <span className="text-sm font-semibold text-sidebar-foreground tracking-tight">Harmony Digital</span>
             <span className="text-xs text-muted-foreground">School Readiness</span>
@@ -218,7 +194,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-background shrink-0">
           <div className="flex items-center gap-2">
-            <HexLogo className="w-7 h-7 text-primary" />
+            <HarmonyLogo className="w-9 h-9 shrink-0" />
             <span className="text-sm font-semibold">Harmony Digital</span>
           </div>
           <div className="flex items-center gap-1">
@@ -247,7 +223,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-2 px-4 py-4 pb-3 border-b border-sidebar-border">
-                <HexLogo className="w-7 h-7 text-primary" />
+                <HarmonyLogo className="w-9 h-9 shrink-0" />
                 <span className="text-sm font-semibold">Harmony Digital</span>
               </div>
               <nav className="flex-1 p-3 space-y-1">

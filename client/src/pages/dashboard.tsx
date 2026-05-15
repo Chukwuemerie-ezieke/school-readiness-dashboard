@@ -1,5 +1,6 @@
 import { useAssessment } from "@/lib/assessment-store";
 import { useAuth } from "@/lib/auth-context";
+import { HarmonyLogo } from "@/components/HarmonyLogo";
 import {
   DOMAINS,
   getDomainScore,
@@ -534,9 +535,7 @@ function SchoolEmptyState({ onLoadDemo }: { onLoadDemo: () => void }) {
   return (
     <div className="flex items-center justify-center min-h-[calc(100dvh-56px)] md:min-h-dvh p-6">
       <div className="text-center max-w-md space-y-4">
-        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
-          <Shield className="w-8 h-8 text-primary" />
-        </div>
+        <HarmonyLogo className="w-20 h-20 mx-auto" />
         <h1 className="text-xl font-bold">School Readiness Dashboard</h1>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Assess your school's cybersecurity and digital transformation maturity using NIST CSF and ISO 27001-inspired controls across 10 domains.

@@ -25,6 +25,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2, CheckCircle2 } from "lucide-react";
+import { HarmonyLogo } from "@/components/HarmonyLogo";
 
 const signupSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters"),
@@ -36,31 +37,6 @@ const signupSchema = z.object({
 });
 
 type SignupValues = z.infer<typeof signupSchema>;
-
-function HexLogo() {
-  return (
-    <svg
-      viewBox="0 0 40 44"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="w-10 h-10"
-      aria-label="Harmony Digital Consults Logo"
-    >
-      <path
-        d="M20 2L36.5 11.5V30.5L20 40L3.5 30.5V11.5L20 2Z"
-        stroke="hsl(var(--primary))"
-        strokeWidth="2.5"
-        fill="none"
-      />
-      <path
-        d="M14 15V29M26 15V29M14 22H26"
-        stroke="hsl(var(--primary))"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 export default function SignupPage() {
   const { signUp, connectionError } = useAuth();
@@ -110,7 +86,7 @@ export default function SignupPage() {
       <div className="w-full max-w-sm space-y-6">
         {/* Brand header */}
         <div className="flex flex-col items-center text-center space-y-2">
-          <HexLogo />
+          <HarmonyLogo className="w-14 h-14" />
           <div>
             <h1 className="text-lg font-bold tracking-tight">Harmony Digital</h1>
             <p className="text-xs text-muted-foreground">School Readiness Dashboard</p>
