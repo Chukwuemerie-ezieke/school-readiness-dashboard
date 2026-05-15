@@ -7,3 +7,11 @@ vite.config.ts.*
 *.db
 *.db-shm
 *.db-wal
+.vercel
+
+# Vercel
+.vercel
+
+# Environment variables (kept in Vercel)
+.env
+.env.local
